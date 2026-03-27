@@ -1,0 +1,38 @@
+MAHE HACKATHON TRACKS:
+
+1) INTENT AND TRAJECTORY PREDICTION:
+
+SYNOPSIS:
+
+Predict movement of pedestrians and cyclists using previous 2 seconds footage to predict next 3 seconds, measure of human behaviour
+
+Requirements: Strong knowledge of RNNs (LSTMs/GRUs) or Transformers (for temporal data) and social-pooling (how people move in groups).
+
+What you must produce:A model that takes 2 seconds of past $(x, y)$ coordinates.The Output: A "multi-modal" prediction. Instead of one line, you output the 3 most likely paths (e.g., Path A: continues straight, Path B: turns left, Path C: stops).Success Metric: Your "Final Displacement Error" (FDE) must be low—meaning your predicted final $(x, y)$ point is very close to where the person actually ended up.
+
+
+2) REAL TIME DRIVABLE SPACE SEGMENTATION
+
+The car needs to know exactly which pixels on the screen are "road" and which are "not road" (sidewalks, grass, barriers).
+
+Requirements: Familiarity with Encoder-Decoder models like U-Net or DeepLabV3+. You need to optimize for speed (FPS).
+
+What you must produce:
+A pipeline that processes a camera frame and spits out a binary mask (a black and white image where white = drivable road).
+Edge Case Handling: Your model must not get confused by puddles (which look like sky) or gravel (which looks like off-road).
+
+Success Metric: High mIoU (how well your "road" mask overlaps with the real road) while maintaining high FPS (frames per second).
+
+
+3)BIRDS EYE VIEW 2D OCCUPANCY
+
+Cameras see the world in "perspective" (far things look small). Planning software needs a "top-down" map (like a mini-map in a video game). You must translate a front-facing photo into a flat, top-down grid.
+
+This involves complex math and "spatial transformers" to warp the image correctly.
+
+Requirements: Knowledge of Homography, Inverse Perspective Mapping, and architectures like BEVFormer.
+
+What you must produce:
+A 2D occupancy grid where each pixel (representing roughly 10cm of real space) is assigned a probability of being "occupied" by an object.
+The Transformation: You must ensure that a car near the camera and a car far away both look like the same size on your top-down map (no "stretching").
+Success Metric: Occupancy IoU compared against LiDAR data (since LiDAR is the ground truth for "truth in 3D space").

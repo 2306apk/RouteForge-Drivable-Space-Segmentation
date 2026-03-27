@@ -1,6 +1,10 @@
 # Python env
 .venv/
 venv/
+drivable_env/
+
+# Dataset
+Dataset/
 
 # Python cache
 __pycache__/

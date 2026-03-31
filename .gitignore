@@ -1,15 +1,96 @@
-# Python env
-.venv/
-venv/
+# -------------------------
+# OS / Editor
+# -------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
 
-# Python cache
+# -------------------------
+# Python
+# -------------------------
 __pycache__/
 *.py[cod]
-
-# Build/test artifacts
+*$py.class
+*.so
+*.pyd
+*.egg-info/
+.eggs/
+build/
+dist/
+pip-wheel-metadata/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
 
-# Local outputs
-Output/
+# -------------------------
+# Virtual environments
+# -------------------------
+.venv/
+venv/
+env/
+ENV/
+
+# -------------------------
+# Jupyter
+# -------------------------
+.ipynb_checkpoints/
+
+# -------------------------
+# ML artifacts / checkpoints
+# -------------------------
+*.pth
+*.pt
+*.ckpt
+*.onnx
+*.engine
+*.tflite
+checkpoints/
+runs/
+wandb/
+mlruns/
+tensorboard/
+events.out.tfevents*
+
+# -------------------------
+# Data (keep datasets out of git)
+# -------------------------
+data/
+dataset/
+datasets/
+Dataset/
 outputs/
+predictions/
+masks/
+logs/
+tmp/
+temp/
+
+# -------------------------
+# Secrets / env files
+# -------------------------
+.env
+.env.*
+*.pem
+*.key
+*.p12
+secrets.json
+
+# -------------------------
+# NuScenes / large binaries
+# -------------------------
+*.tar
+*.zip
+*.7z
+*.gz
+*.bz2
+*.xz
+
+# -------------------------
+# Optional: keep only placeholder files in empty dirs
+# -------------------------
+!.gitkeep

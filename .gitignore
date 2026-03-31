@@ -1,0 +1,9 @@
+data/
+outputs/
+venv/
+venv311/
+models/
+*.pth
+*.jpg
+*.png
+__pycache__/

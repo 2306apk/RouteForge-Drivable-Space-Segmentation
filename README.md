@@ -283,21 +283,24 @@ The model successfully learns to distinguish drivable asphalt from surrounding n
 ```
 RouteForge-Drivable-Space-Segmentation/
 │
-├── scripts/
-│ ├── core/ # Mask generation & projection utilities
-│ │ ├── generate_masks.py
-│ │ ├── nuscenes_loader.py
-│ │ ├── utils_projection.py
-│ │
-│ ├── training/ # Model training & evaluation
-│ │ ├── dataset.py
-│ │ ├── model.py
-│ │ ├── train_model.py
-│ │ ├── test_metrics.py
-│ │ ├── utils.py
+├── 📁 models/
+│   └── 📄 unet_best.pth          # Trained model weights
 │
-├── .gitignore
-├── README.md
+├── 📁 scripts/
+│   │
+│   ├── 📁 core/
+│   │   ├── 📄 inference.py           # Inference & visualization script
+│   │   ├── 📄 generate_masks_2.py    # Ground truth mask generation
+│   │   ├── 📄 nuscenes_loader.py     # nuScenes data loading utilities
+│   │   └── 📄 utils_projection.py    # 3D → 2D projection logic
+│   │
+│   └── 📁 training/
+│       ├── 📄 train_model.py     # Training loop (BCE + Dice + AMP)
+│       ├── 📄 model.py           # Custom UNet architecture
+│       ├── 📄 dataset.py         # Dataset & preprocessing
+│       └── 📄 utils.py           # Training utilities
+│
+└── 📄 README.md                  # Technical documentation
 ```
 
 ---

@@ -3,9 +3,14 @@ import torch.nn as nn
 
 
 class BCEDiceLoss(nn.Module):
-    def __init__(self, bce_weight=0.6, eps=1e-6):
+    def __init__(self, bce_weight=0.6, eps=1e-6, pos_weight=None):
         super().__init__()
-        self.bce = nn.BCEWithLogitsLoss()
+        if pos_weight is not None:
+            self.register_buffer("pos_weight", torch.tensor(float(pos_weight), dtype=torch.float32))
+            self.bce = nn.BCEWithLogitsLoss(pos_weight=self.pos_weight)
+        else:
+            self.pos_weight = None
+            self.bce = nn.BCEWithLogitsLoss()
         self.bce_weight = bce_weight
         self.eps = eps
 

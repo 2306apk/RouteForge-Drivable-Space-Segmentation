@@ -205,7 +205,7 @@ Trains the custom U-Net from scratch on the nuScenes dataset. This script will:
 - Save the best-performing model weights to `model.pth`
 
 ```bash
-python train.py
+python -m scripts.training.train_model
 ```
 
 **Expected console output (per epoch):**
@@ -213,7 +213,7 @@ python train.py
 Epoch [1/50] | Train Loss: 0.4312 | Val mIoU: 0.7841
 Epoch [2/50] | Train Loss: 0.3105 | Val mIoU: 0.8220
 ...
-✅ Best model saved → model.pth (Val mIoU: 0.9134)
+✅ Best model saved → unet_best.pth (Val mIoU: 0.9134)
 ```
 
 ---
@@ -223,12 +223,12 @@ Epoch [2/50] | Train Loss: 0.3105 | Val mIoU: 0.8220
 Loads the saved `model.pth` weights and runs inference on a sample image (Image can be of your own choice). Outputs the predicted binary mask, a colour overlay, and the measured FPS.
 
 ```bash
-python inference.py
+python -m scripts.training.inference
 ```
 
 **Expected output:**
 ```
-⚡ Inference Speed: ~1000 FPS
+⚡ 30 FPS (real-time performance)
 ✅ Segmentation overlay saved → output.png
 ```
 
@@ -283,10 +283,21 @@ The model successfully learns to distinguish drivable asphalt from surrounding n
 ```
 RouteForge-Drivable-Space-Segmentation/
 │
-├── train.py             # Full training loop with validation and model checkpointing
-├── inference.py         # Inference script with FPS measurement and mask visualisation
-├── model.pth            # Saved best model weights (generated after training)
-└── README.md            # This file
+├── scripts/
+│ ├── core/ # Mask generation & projection utilities
+│ │ ├── generate_masks.py
+│ │ ├── nuscenes_loader.py
+│ │ ├── utils_projection.py
+│ │
+│ ├── training/ # Model training & evaluation
+│ │ ├── dataset.py
+│ │ ├── model.py
+│ │ ├── train_model.py
+│ │ ├── test_metrics.py
+│ │ ├── utils.py
+│
+├── .gitignore
+├── README.md
 ```
 
 ---

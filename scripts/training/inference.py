@@ -1,32 +1,24 @@
 import os
-import sys
 import cv2
 import torch
 import numpy as np
+from tqdm import tqdm
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "../.."))
-
-if SCRIPT_DIR not in sys.path:
-    sys.path.append(SCRIPT_DIR)
-
-from model import UNet
+from .model import UNet
 
 
 # -----------------------------
-# PATHS
+# CONFIG
 # -----------------------------
-IMAGE_DIR = os.path.join(ROOT_DIR, "data", "samples", "CAM_FRONT")
-MODELS_DIR = os.path.join(ROOT_DIR, "models")
-OUTPUT_DIR = os.path.join(ROOT_DIR, "outputs")
+IMAGE_SIZE = 128              # change via CLI
+MASK_THRESHOLD = 0.48         # slight improvement over 0.5
 
-MASK_DIR = os.path.join(OUTPUT_DIR, "masks")
-OVERLAY_DIR = os.path.join(OUTPUT_DIR, "overlays")
+MODEL_PATH_128 = "models/unet_best.pth"
+MODEL_PATH_256 = "models/unet_best_256x512.pth"
 
-BEST_MODEL_PATH = os.path.join(MODELS_DIR, "unet_best.pth")
-
-IMAGE_SIZE = 128
-MASK_THRESHOLD = 0.52
+IMAGE_DIR = "data/images"
+OUTPUT_MASK_DIR = "outputs/masks"
+OUTPUT_OVERLAY_DIR = "outputs/overlays"
 
 
 # -----------------------------
@@ -40,49 +32,50 @@ device = (
 
 
 # -----------------------------
-# PREPROCESS
+# HELPERS
 # -----------------------------
 def preprocess(img):
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = cv2.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
     img = img.astype(np.float32) / 255.0
     img = np.transpose(img, (2, 0, 1))
     return torch.tensor(img).unsqueeze(0)
 
 
-# -----------------------------
-# POSTPROCESS (ORIGINAL CORE)
-# -----------------------------
-def postprocess_mask(prob):
-    mask = (prob > MASK_THRESHOLD).astype(np.uint8)
+def postprocess(pred):
+    pred = pred.squeeze().cpu().numpy()
+    mask = (pred > MASK_THRESHOLD).astype(np.uint8)
+    return mask
 
+
+def refine_with_color(mask, img):
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+    lower = np.array([0, 0, 50])
+    upper = np.array([180, 60, 255])
+
+    road_mask = cv2.inRange(hsv, lower, upper)
+    road_mask = road_mask // 255
+
+    return mask * road_mask
+
+
+def perspective_constraint(mask):
     h, w = mask.shape
+    constrained = np.zeros_like(mask)
 
-    # remove sky
-    mask[:int(0.30 * h), :] = 0
+    for y in range(h):
+        width = int((y / h) * w * 0.9)
+        center = w // 2
+        left = max(center - width // 2, 0)
+        right = min(center + width // 2, w)
 
-    # small smoothing
-    kernel = np.ones((3, 3), np.uint8)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+        constrained[y, left:right] = mask[y, left:right]
 
-    return mask
-
-
-# -----------------------------
-# 🔥 ONLY FIX: NIGHT BOOST
-# -----------------------------
-def boost_night(mask, prob):
-    if np.mean(prob) < 0.08:
-        boosted = (prob > 0.3).astype(np.uint8)
-        mask = np.maximum(mask, boosted)
-    return mask
+    return constrained
 
 
-# -----------------------------
-# KEEP MAIN ROAD (ORIGINAL)
-# -----------------------------
-def keep_largest(mask):
-    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
+def keep_largest_component(mask):
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
 
     if num_labels <= 1:
         return mask
@@ -91,178 +84,131 @@ def keep_largest(mask):
     return (labels == largest).astype(np.uint8)
 
 
-def keep_bottom(mask):
-    h, w = mask.shape
-
-    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
-
-    bottom = int(h * 0.9)
-    ids = np.unique(labels[bottom:, :])
-    ids = [i for i in ids if i != 0]
-
-    if not ids:
-        return mask
-
-    new_mask = np.zeros_like(mask)
-    for i in ids:
-        new_mask[labels == i] = 1
-
-    return new_mask
-
-
-# -----------------------------
-# COLOR FILTER (LIGHT ONLY)
-# -----------------------------
-def refine_color(mask, img):
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-
-    sat = hsv[:, :, 1]
-    val = hsv[:, :, 2]
-
-    mask[sat > 80] = 0
-    mask[val > 250] = 0
-
-    return mask
-
-
-# -----------------------------
-# CLEANING (ORIGINAL)
-# -----------------------------
-def remove_small(mask, min_area=800):
-    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
-
-    new_mask = np.zeros_like(mask)
+def remove_small_objects(mask, min_size=500):
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+    cleaned = np.zeros_like(mask)
 
     for i in range(1, num_labels):
-        if stats[i, cv2.CC_STAT_AREA] > min_area:
-            new_mask[labels == i] = 1
+        if stats[i, cv2.CC_STAT_AREA] >= min_size:
+            cleaned[labels == i] = 1
 
-    return new_mask
+    return cleaned
 
 
-def smooth(mask):
+def safe_obstacle_removal(mask):
     kernel = np.ones((3, 3), np.uint8)
-    return cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
 
 
-# -----------------------------
-# OVERLAY
-# -----------------------------
-def overlay(img, mask):
-    out = img.copy().astype(np.float32)
+def overlay_mask(img, mask):
+    overlay = img.copy()
+    color = np.zeros_like(img)
+    color[:, :] = [0, 255, 0]
 
-    green = np.zeros_like(out)
-    green[:, :, 1] = 255
+    mask_3ch = np.stack([mask]*3, axis=-1)
+    overlay = np.where(mask_3ch, cv2.addWeighted(img, 0.5, color, 0.5, 0), img)
 
-    m = mask.astype(bool)
-
-    out[m] = 0.6 * out[m] + 0.4 * green[m]
-
-    return out.astype(np.uint8)
-
-def remove_tiny_vertical(mask):
-    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
-    h, w = mask.shape
-
-    new_mask = np.zeros_like(mask)
-
-    for i in range(1, num_labels):
-        x, y, bw, bh, area = stats[i]
-
-        aspect = bh / (bw + 1e-5)
-
-        # 🔥 only remove VERY obvious humans
-        if aspect > 2.5 and area < 3000:
-            continue
-
-        new_mask[labels == i] = 1
-
-    return new_mask
+    return overlay
 
 
 # -----------------------------
 # LOAD MODEL
 # -----------------------------
 def load_model():
-    if not os.path.exists(BEST_MODEL_PATH):
-        raise FileNotFoundError("Model not found")
+    model = UNet()
+    model.to(device)
 
-    model = UNet().to(device)
-    model.load_state_dict(torch.load(BEST_MODEL_PATH, map_location=device))
+    if IMAGE_SIZE == 128:
+        path = MODEL_PATH_128
+    else:
+        path = MODEL_PATH_256
+
+    model.load_state_dict(torch.load(path, map_location=device))
     model.eval()
 
-    print("Loaded:", BEST_MODEL_PATH)
+    print(f"Loaded model: {path}")
+    print(f"Using device: {device}")
+
     return model
+
+
+# -----------------------------
+# INFERENCE PIPELINE
+# -----------------------------
+def process_image(model, img_path):
+    img = cv2.imread(img_path)
+    orig = img.copy()
+
+    h, w = img.shape[:2]
+
+    inp = preprocess(img).to(device)
+
+    with torch.no_grad():
+        pred = model(inp)
+        pred = torch.sigmoid(pred)
+
+    mask = postprocess(pred)
+
+    # resize back
+    mask = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
+
+    # ---- YOUR BEST PIPELINE ----
+    mask = refine_with_color(mask, orig)
+    mask = perspective_constraint(mask)
+    mask = keep_largest_component(mask)
+    mask = remove_small_objects(mask)
+    mask = safe_obstacle_removal(mask)
+    # ---------------------------
+
+    overlay = overlay_mask(orig, mask)
+
+    return mask, overlay
 
 
 # -----------------------------
 # MAIN
 # -----------------------------
 def run():
-    os.makedirs(MASK_DIR, exist_ok=True)
-    os.makedirs(OVERLAY_DIR, exist_ok=True)
+    os.makedirs(OUTPUT_MASK_DIR, exist_ok=True)
+    os.makedirs(OUTPUT_OVERLAY_DIR, exist_ok=True)
 
     model = load_model()
 
-    images = sorted([
-        f for f in os.listdir(IMAGE_DIR)
+    image_paths = [
+        os.path.join(IMAGE_DIR, f)
+        for f in os.listdir(IMAGE_DIR)
         if f.endswith((".jpg", ".png"))
-    ])
+    ]
 
-    print("Images:", len(images))
+    print(f"Images: {len(image_paths)}")
 
-    for name in images:
-        path = os.path.join(IMAGE_DIR, name)
-        img = cv2.imread(path)
+    for i, path in enumerate(tqdm(image_paths)):
+        mask, overlay = process_image(model, path)
 
-        if img is None:
-            continue
+        name = os.path.basename(path)
 
-        h, w = img.shape[:2]
+        cv2.imwrite(os.path.join(OUTPUT_MASK_DIR, name), mask * 255)
+        cv2.imwrite(os.path.join(OUTPUT_OVERLAY_DIR, name), overlay)
 
-        x = preprocess(img).to(device)
+        if i % 50 == 0:
+            print(f"Processed {i}/{len(image_paths)}")
 
-        with torch.no_grad():
-            pred = model(x)
-
-        prob = torch.sigmoid(pred)[0, 0].cpu().numpy()
-        prob = cv2.resize(prob, (w, h))
-
-        # -----------------------------
-        # FINAL PIPELINE (STABLE)
-        # -----------------------------
-        mask = postprocess_mask(prob)
-
-        mask = boost_night(mask, prob)
-
-        mask = refine_color(mask, img)
-
-        mask = keep_largest(mask)
-        mask = keep_bottom(mask)
-
-        mask = remove_tiny_vertical(mask)   # ⭐ new
-
-        # ⭐ MOVE NIGHT SMOOTHING HERE
-        if np.mean(prob) < 0.1:
-            kernel = np.ones((5,5), np.uint8)
-            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-
-        mask = smooth(mask)
-        mask = remove_small(mask)
-
-        # -----------------------------
-        # OUTPUT
-        # -----------------------------
-        out = overlay(img, mask)
-
-        base = os.path.splitext(name)[0]
-
-        cv2.imwrite(os.path.join(MASK_DIR, base + ".png"), mask * 255)
-        cv2.imwrite(os.path.join(OVERLAY_DIR, base + ".jpg"), out)
+    print("DONE")
+    print(f"Masks saved to: {OUTPUT_MASK_DIR}")
+    print(f"Overlays saved to: {OUTPUT_OVERLAY_DIR}")
 
 
-    print("DONE ✅")
-
-
+# -----------------------------
+# CLI
+# -----------------------------
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--size", type=int, default=128, choices=[128, 256])
+
+    args = parser.parse_args()
+
+    IMAGE_SIZE = args.size
+
     run()

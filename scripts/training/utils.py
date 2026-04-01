@@ -9,9 +9,13 @@ class ResizeNormalize:
         self.image_size = image_size
 
     def __call__(self, image, mask):
-        image = cv2.resize(image, (self.image_size, self.image_size), interpolation=cv2.INTER_LINEAR)
-        mask = cv2.resize(mask, (self.image_size, self.image_size), interpolation=cv2.INTER_NEAREST)
+        if isinstance(self.image_size, tuple):
+            h, w = self.image_size
+        else:
+            h, w = self.image_size, self.image_size
 
+        image = cv2.resize(image, (w, h), interpolation=cv2.INTER_LINEAR)
+        mask = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
         image = image.astype(np.float32) / 255.0
         image = np.transpose(image, (2, 0, 1))
 

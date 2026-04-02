@@ -38,6 +38,7 @@ The system performs **pixel-wise semantic segmentation**, classifying each pixel
 
 The core of the perception engine is a custom-built **U-Net (Encoder-Decoder)** architecture, specifically designed for high-frequency binary segmentation tasks.
 
+
 ```
 Input Image (3 × 128 × 128)
         │
@@ -104,6 +105,7 @@ Output Mask (1 × 128 × 128)
 | Output | Binary Mask (Drivable / Non-Drivable) |
 
 > The hybrid BCE + Dice Loss was chosen to handle the inherent **class imbalance** between road pixels and non-road pixels in urban scenes, enabling sharp and precise boundary detection.
+> The system supports both lightweight (128×128) and high-resolution (256×512) training configurations for balancing speed and spatial accuracy.
 
 ---
 
@@ -205,7 +207,11 @@ Trains the custom U-Net from scratch on the nuScenes dataset. This script will:
 - Save the best-performing model weights to `model.pth`
 
 ```bash
+# Train 128×128 model (fast)
 python -m scripts.training.train_model
+
+# Train 256×512 model (higher spatial accuracy)
+python -m scripts.training.train_model_256x512
 ```
 
 **Expected console output (per epoch):**
@@ -214,6 +220,7 @@ Epoch [1/50] | Train Loss: 0.4312 | Val mIoU: 0.7841
 Epoch [2/50] | Train Loss: 0.3105 | Val mIoU: 0.8220
 ...
 ✅ Best model saved → unet_best.pth (Val mIoU: 0.9134)
+                      unet_best_256x512.pth (Val mIoU: 0.8660)         
 ```
 
 ---
@@ -223,7 +230,11 @@ Epoch [2/50] | Train Loss: 0.3105 | Val mIoU: 0.8220
 Loads the saved `model.pth` weights and runs inference on a sample image (Image can be of your own choice). Outputs the predicted binary mask, a colour overlay, and the measured FPS.
 
 ```bash
-python -m scripts.training.inference
+# Run inference (128 model)
+python -m scripts.training.inference --size 128
+
+# Run inference (256×512 model)
+python -m scripts.training.inference --size 256
 ```
 
 **Expected output:**
@@ -248,7 +259,7 @@ A matplotlib window will display:
 
 | Metric | Value |
 |--------|-------|
-| **Inference Speed** | ~1000 FPS (T4 GPU) |
+| **Inference Speed** | ~Real-time performance (~25–60 FPS depending on hardware) |
 | **Optimization Technique** | Mixed Precision (`torch.amp`) |
 | **Loss Function** | Hybrid BCE + Dice Loss |
 | **Primary Metric** | Mean Intersection over Union (mIoU) |
@@ -283,8 +294,9 @@ The model successfully learns to distinguish drivable asphalt from surrounding n
 ```
 RouteForge-Drivable-Space-Segmentation/
 │
-├── 📁 models/
-│   └── 📄 unet_best.pth          # Trained model weights
+├├── 📁 models/
+│   ├── 📄 unet_best.pth              # 128×128 trained model
+│   └── 📄 unet_best_256x512.pth      # 256×512 trained model      # Trained model weights
 │
 ├── 📁 scripts/
 │   │
@@ -295,7 +307,8 @@ RouteForge-Drivable-Space-Segmentation/
 │   │   └── 📄 utils_projection.py    # 3D → 2D projection logic
 │   │
 │   └── 📁 training/
-│       ├── 📄 train_model.py     # Training loop (BCE + Dice + AMP)
+│       ├── 📄 train_model.py              # 128×128 training
+├       ├── 📄 train_model_256x512.py      # 256×512 training
 │       ├── 📄 model.py           # Custom UNet architecture
 │       ├── 📄 dataset.py         # Dataset & preprocessing
 │       └── 📄 utils.py           # Training utilities

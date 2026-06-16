@@ -287,8 +287,11 @@ The model successfully learns to distinguish drivable asphalt from surrounding n
 > <img width="1017" height="224" alt="image" src="https://github.com/user-attachments/assets/b6628a4e-4138-4cbe-ba96-5e1dfba6d3c8" />
 
 
-<video src="https://github.com/user-attachments/assets/cdcc8131-36a3-4ee9-925a-c1decbb4f42a" controls="controls" style="max-width: 100%;">
-</video>
+
+https://github.com/user-attachments/assets/e429cbcd-440b-4887-bf00-47e7e3ff6b13
+
+
+
 
 ---
 

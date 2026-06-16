@@ -17,7 +17,7 @@
 
 ## 🔍 Project Overview
 
-**RouteForge** addresses one of the most critical challenges in Level 4 autonomous driving: identifying safe, drivable **"Free Space"** in complex urban environments — *without* relying on painted lane markings or map priors.
+**RouteForge** addresses one of the most critical challenges in Level 4 autonomous driving: identifying safe, drivable **"Free Space"** in complex urban environments *without* relying on painted lane markings or map priors.
 
 The system performs **pixel-wise semantic segmentation**, classifying each pixel of a front-facing camera frame as either:
 
